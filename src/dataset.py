@@ -112,7 +112,7 @@ class Mitosis_Base_Dataset(Dataset):
 
 
     def sample_patches(self):
-        """Sample all patches for one epoch."""
+        """Sample patches for each epoch."""
         raise NotImplementedError
 
 
@@ -122,9 +122,8 @@ class Mitosis_Base_Dataset(Dataset):
 
 
     def __len__(self):
-        return len(self.slide_objects)
+        return len(self.data)
 
-    
     def __getitem__(self, idx):
         return None
 
@@ -314,6 +313,25 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         return {'file': fn, 'coords': (x, y), 'label': label}
 
 
+    def __len__(self):
+        return len(self.samples)
+
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        file, coords, label = sample['file'], sample['coords'], sample['label']
+        slide = self.slide_objects[file]
+
+        img = slide.load_image(coords)
+        if self.transforms is not None:
+            img = self.transforms(img)
+        else:
+            img = torch.from_numpy(img / 255).permute(2, 0, 1).type(torch.float32)
+
+        label = torch.as_tensor(label, dtype=torch.int64)
+        return img, label
+
+
 
 class Mitosis_Validation_Dataset(Mitosis_Base_Dataset):
     """Dataset for mitosis classification. 
@@ -371,6 +389,24 @@ class Mitosis_Validation_Dataset(Mitosis_Base_Dataset):
 
         return patches 
 
+
+    def __len__(self):
+        return len(self.samples)
+
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        file, coords, label = sample['file'], sample['coords'], sample['label']
+        slide = self.slide_objects[file]
+
+        img = slide.load_image(coords)
+        if self.transforms is not None:
+            img = self.transforms(img)
+        else:
+            img = torch.from_numpy(img / 255).permute(2, 0, 1).type(torch.float32)
+
+        label = torch.as_tensor(label, dtype=torch.int64)
+        return img, label
 
         
 
