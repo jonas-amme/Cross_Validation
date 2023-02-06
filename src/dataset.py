@@ -15,6 +15,17 @@ Coords = Tuple[int, int]
 
 
 class SlideObject():
+    """Class to handle WSI objects.
+    
+    Args:
+        slide_path (str, optional): Path to file. Defaults to None.
+        annotations (pd.DataFrame, optional): Annotations [e.g. x, y, class]. Defaults to None.
+        patch_size (Coords, optional): Patch size. Defaults to (128, 128).
+        level (int, optional): Level to sample patches. Defaults to 0.
+
+    Raises:
+            ValueError: If no filepath is provided.
+    """
     def __init__(
         self,
         slide_path: str = None,
@@ -23,7 +34,7 @@ class SlideObject():
         level: int = 0
         ) -> None:
 
-        if slide_path is None:
+        if slide_path is None: 
             raise ValueError('Must provide filename')
 
         self.slide_path = slide_path
@@ -42,14 +53,14 @@ class SlideObject():
         return f"SlideObject for {self.slide_path}"
     
 
-    # TODO: add downfactor to sample from different levels (not necessary for now)
     def load_image(self, coords: Coords) -> np.ndarray:
         """Returns a patch of the slide at the given coordinates."""
         patch = self.slide.read_region(coords, self.level, self.patch_size).convert('RGB')
         return np.array(patch)  
 
 
-    def get_label(self, x: int, y: int):
+    def get_label(self, x: int, y: int) -> int:
+        """Whether a patch contains a mitotic figure."""
         mfs = self.annotations.query('label == 1')
         idxs = (mfs.x > x) & (mfs.x < (x + self.patch_size[0])) \
             & (mfs.y > y) & (mfs.y < (y + self.patch_size[0]))
@@ -59,9 +70,105 @@ class SlideObject():
             return 0
 
 
+class Mitosis_Base_Dataset(Dataset):
+    """Base dataset class for mitosis classificaiton.
+
+    Contains functionality to load SlideObjects. Functionality for sampling 
+    patches needs to be implemented with `sample_patches`, `sample_func`.
+
+    Args:
+        data (pd.DataFrame, optional): Annotaitons with columns [x, y, class, filename, slide]. Defaults to None.
+        image_dir (str, optional): Directory with images. Defaults to None.
+    """
+    def __init__(
+        self,
+        data: pd.DataFrame = None,
+        image_dir: str = None) -> None:
+
+        self.data = data
+        self.image_dir = image_dir  
+
+        self.slide_objects = self.load_slide_objects()
 
 
-class Mitosis_Classification_Dataset(Dataset):
+    def load_slide_objects(self) -> Dict[str, SlideObject]:
+        """Initializes slide objects from dataframe.
+
+        Returns:
+            Dict[str, SlideObject]: Dictionary with all slide objects. 
+        """
+        fns = self.data.filename.unique().tolist()
+        slide_objects = {}
+        for fn in tqdm(fns, desc='Initializing slide objects'):
+            slide_path = os.path.join(self.image_dir, fn)
+            annotations = self.data.query('filename == @fn')[['x', 'y', 'label']].reset_index()
+            slide_objects[fn] = SlideObject(
+                slide_path=slide_path,
+                annotations=annotations,
+                patch_size=self.patch_size,
+                level=self.level
+            )
+        return slide_objects
+
+
+    def sample_patches(self):
+        """Sample all patches for one epoch."""
+        raise NotImplementedError
+
+
+    def sample_func(self):
+        """Sample coordinates for a single patch."""
+        raise NotImplementedError
+
+
+    def __len__(self):
+        return len(self.slide_objects)
+
+    
+    def __getitem__(self, idx):
+        return None
+
+
+    def get_ids(self):
+        return self.data['slide'].unique()
+
+
+    def get_labels(self):
+        return self.data['label'].unique()
+
+
+    @staticmethod
+    def collate_fn(batch):
+        """Collate function for the data loader."""
+        images = list()
+        targets = list()
+        for b in batch:
+            images.append(b[0])
+            targets.append(b[1])
+        images = torch.stack(images, dim=0)
+        return images, targets
+
+
+
+class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
+    """Datasat for mitosis classification.
+
+    Randomly samples patches around mitotic figures, imposters or random locations.
+    Patch coordinsates are slightly shifted after sampling to add more variability.
+
+    This class is used for training. The validtion dataset should be constructed 
+    from `Mitosis_Validation_Dataset`.
+
+    Args:
+        data (pd.DataFrame, optional): Annotaitons with columns [x, y, class, filename, slide]. Defaults to None.
+        image_dir (str, optional): Directory with images. Defaults to None.
+        pseudo_epoch_length (int, optional): Number of patches for each epoch. Defaults to 512.
+        mit_prob (float, optional): Percentage of patches with mitotic figures. Defaults to 0.5.
+        arb_prob (float, optional): Percentage of random patches. Defaults to 0.25.
+        patch_size (Coords, optional): Patch size. Defaults to (128,128).
+        level (int, optional): Level to sample. Defaults to 0.
+        transforms (Union[List[Callable], Callable], optional): Transformations. Defaults to None.
+    """
     def __init__(
         self,
         data: pd.DataFrame = None,
@@ -86,59 +193,6 @@ class Mitosis_Classification_Dataset(Dataset):
         self.samples = self.sample_patches()
 
 
-    def load_database(self) -> pd.DataFrame:
-        """Opens the sqlite database and converts it to pandas dataframe. 
-        If indices are provided, data is splitted accordingly.
-
-        Returns:
-            pd.DataFrame: Dataframe [x, y, label, filename, slide].
-        """
-        # command to select all data from the table
-        command = 'SELECT coordinateX as x, coordinateY as y, Annotations.agreedClass as label, Slides.filename, Annotations.slide\
-                    FROM Annotations_coordinates \
-                    INNER JOIN Annotations \
-                    ON Annotations_coordinates.annoId = Annotations.uid \
-                    INNER JOIN Slides \
-                    ON Annotations.slide = Slides.uid \
-                    WHERE Annotations.deleted=0'
-
-        if self.sqlite_file:
-            DB = sqlite3.connect(self.sqlite_file)
-
-            # execute the command and create dataframe
-            df = pd.read_sql_query(command, DB)
-
-            # load data for current split
-            if self.indices:
-                df = df.query('slide in @indices')
-        else:
-            raise ValueError(
-                'Cannot load database due to missing\
-                 file for sqlite_file={}'.format(self.sqlite_file)
-                 )
-
-        return df 
-
-    def load_slide_objects(self) -> Dict[str, SlideObject]:
-        """Initializes slide objects from dataframe.
-
-        Returns:
-            Dict[str, SlideObject]: Dictionary with all slide objects. 
-        """
-        fns = self.data.filename.unique().tolist()
-        slide_objects = {}
-        for fn in tqdm(fns, desc='Initializing slide objects'):
-            slide_path = os.path.join(self.image_dir, fn)
-            annotations = self.data.query('filename == @fn')[['x', 'y', 'label']].reset_index()
-            slide_objects[fn] = SlideObject(
-                slide_path=slide_path,
-                annotations=annotations,
-                patch_size=self.patch_size,
-                level=self.level
-            )
-        return slide_objects
-
-
     def sample_patches(
         self, 
         mit_prob: float=None, 
@@ -160,7 +214,6 @@ class Mitosis_Classification_Dataset(Dataset):
         for idx, slide in enumerate(slides):
             patches[idx] = self.sample_func(slide, mit_prob, arb_prob)
         return patches
-
 
 
     def sample_func(
@@ -262,49 +315,20 @@ class Mitosis_Classification_Dataset(Dataset):
 
 
 
-    def __len__(self):
-        return len(self.samples)
+class Mitosis_Validation_Dataset(Mitosis_Base_Dataset):
+    """Dataset for mitosis classification. 
 
-    
-    def __getitem__(self, idx):
-        # get sample
-        sample = self.samples[idx]
-        # extract sample info
-        file, coords, label = sample['file'], sample['coords'], sample['label']
-        # get slide object
-        slide = self.slide_objects[file]
-        # get img
-        img = slide.load_image(coords)
-        if self.transform is not None:
-            img = self.transforms(img)
-        else:
-            img = torch.from_numpy(img / 255).permute(2, 0, 1).type(torch.float32)
-        label = torch.as_tensor(label, dtype=torch.int64)
-        return img, label
+    Used for validation of a classifier. Instead of sampling patches randomly,
+    all annotations from the dataset are loaded and centered around the annotation.
 
-
-    def get_ids(self):
-        return self.data['slide'].unique()
-
-
-    def get_labels(self):
-        return self.data['label'].unique()
-
-
-    @staticmethod
-    def collate_fn(batch):
-        """Collate function for the data loader."""
-        images = list()
-        targets = list()
-        for b in batch:
-            images.append(b[0])
-            targets.append(b[1])
-        images = torch.stack(images, dim=0)
-        return images, targets
-
-
-
-class Mitosis_Validation_Dataset(Mitosis_Classification_Dataset):
+    Args:
+        data (pd.DataFrame, optional): _description_. Defaults to None.
+        image_dir (str, optional): _description_. Defaults to None.
+        patch_size (Coords, optional): _description_. Defaults to (128,128).
+        level (int, optional): _description_. Defaults to 0.
+        n_random_samples (int, optional): _description_. Defaults to 0.
+        transforms (Union[List[Callable], Callable], optional): _description_. Defaults to None.
+    """
     def __init__(
         self, 
         data: pd.DataFrame = None,
