@@ -24,8 +24,10 @@ class Mitosis_Classifier(nn.Module):
         weights: str = 'DEFAULT') -> None:
         super().__init__()
 
-        assert weights in ['DEFAULT', 'IMAGENET1K_V1', None], \
+        assert weights in ['DEFAULT', 'IMAGENET1K_V1', 'None'], \
             'Unsupported weights for {}. Should be one of [DEFAULT, IMAGENET1K_V1, None]'.format(weights)
+        
+        weights = None if weights == 'None' else weights
 
         assert model in ['resnet18', 'resent50'], \
             'Unsupported model for {}. Should be one of [resnet18, resnet50]'.format(model)

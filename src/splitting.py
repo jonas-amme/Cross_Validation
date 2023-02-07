@@ -4,7 +4,7 @@ import numpy as np
 
 
 
-class _BaseCV():
+class _BaseCV:
     """Base class to perform cross validation.
 
     Implementations must define `_create_split_masks` or `_create_split_indices`.
@@ -97,13 +97,12 @@ class MonteCarloCV(_BaseCV):
         self.n_repeats = n_repeats
         self.shuffle = shuffle
         self.seed = seed 
-        
-        self.splits = []
+    
 
     def split(self, samples, groups = None):
         for train, val, test in super().split(samples, groups):
             yield train, val, test
-            self.splits.append([train, val, test])
+
 
     def _create_split_indices(self, samples, groups = None):
         """Splits the data randomly into train, val and test split according to split sizes."""
@@ -153,8 +152,6 @@ class KfoldCV(_BaseCV):
         self.shuffle = shuffle
         self.seed = seed
 
-        self.splits = []
-
 
     def split(self, samples, groups = None):
         n_samples = samples.shape[0]
@@ -165,8 +162,7 @@ class KfoldCV(_BaseCV):
 
         for train, val, test in super().split(samples, groups):
             yield train, val, test
-            self.splits.append([train, val, test])
-
+            
 
     def _create_split_indices(self, samples, groups):
         """Splits the data randomly into k-folds and creates train, val and test splits accordingly for each run."""
