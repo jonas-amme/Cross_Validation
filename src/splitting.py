@@ -146,7 +146,7 @@ class KfoldCV(_BaseCV):
     def __init__(
         self,
         n_folds: int = 5,
-        shuffle: bool = True,
+        shuffle: bool = False,
         seed: int = None) -> None:
         self.n_folds = n_folds
         self.shuffle = shuffle
@@ -162,7 +162,7 @@ class KfoldCV(_BaseCV):
 
         for train, val, test in super().split(samples, groups):
             yield train, val, test
-            
+
 
     def _create_split_indices(self, samples, groups):
         """Splits the data randomly into k-folds and creates train, val and test splits accordingly for each run."""

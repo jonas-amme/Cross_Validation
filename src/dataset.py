@@ -45,8 +45,12 @@ class SlideObject:
         self.slide = openslide.open_slide(self.slide_path)
 
     @property
-    def slide_size(self) -> Coords:
+    def slide_dims(self) -> Coords:
         return self.slide.level_dimensions[self.level]
+
+    @property
+    def patch_dims(self) -> Coords:
+        return (self.patch_size, self.patch_size)
 
 
     def __str__(self) -> str:
@@ -57,7 +61,7 @@ class SlideObject:
         """Returns a patch of the slide at the given coordinates."""
         size = (self.patch_size, self.patch_size)
         patch = self.slide.read_region(coords, self.level, size).convert('RGB')
-        return np.array(patch)  
+        return patch
 
 
     def get_label(self, x: int, y: int) -> int:
@@ -81,16 +85,19 @@ class Mitosis_Base_Dataset(Dataset):
         sqlite_file (str): Path to database. 
         image_dir (str): Directory with images. 
         indices (np.array, optinal): Indices to select slides from database. Defaults to None.
+        sqlite_command (str, optional): Command to select data from sqlite database. Defaults to None.
     """
     def __init__(
         self,
         sqlite_file: str,
         image_dir: str,
-        indices: np.array = None) -> None:
+        indices: np.array = None, 
+        sqlite_command: str = None) -> None:
 
         self.sqlite_file = sqlite_file
         self.image_dir = image_dir  
         self.indices = indices
+        self.sqlite_command = sqlite_command
 
         self.data = self.load_database()
 
@@ -105,7 +112,7 @@ class Mitosis_Base_Dataset(Dataset):
         # open database file 
         DB = sqlite3.connect(self.sqlite_file)
         
-        # command to select all data from the table
+        # default command to select all data from the table
         command = 'SELECT coordinateX as x, coordinateY as y, Annotations.agreedClass as label, Slides.filename, Annotations.slide\
                     FROM Annotations_coordinates \
                     INNER JOIN Annotations \
@@ -115,13 +122,16 @@ class Mitosis_Base_Dataset(Dataset):
                     WHERE Annotations.deleted=0'
 
         # execute the command and create dataframe
-        df = pd.read_sql_query(command, DB)
+        if self.sqlite_command is None:
+            df = pd.read_sql_query(command, DB)
+        else:
+            df = pd.read_sql_query(self.sqlite_command, DB)
 
         # load data for current split
-        if self.indices:
-            df = df.query('slide in @indices')
+        if self.indices is not None:
+            df = df.query('slide in @self.indices')
 
-        return df 
+        return df.reset_index()
 
 
     def return_split(self, indices, training: bool = False, **kwargs):
@@ -168,7 +178,7 @@ class Mitosis_Base_Dataset(Dataset):
 
 
     def summarize(self):
-        print('Number of slides: {}'.format(len(self.data['slide'].unique())))
+        print('\nNumber of slides: {}'.format(len(self.data['slide'].unique())))
         print('Number of mitosis: {}'.format(len(self.data.query('label == 1'))))
         print('Number of imposter: {}'.format(len(self.data.query('label == 2'))))
 
@@ -182,6 +192,7 @@ class Mitosis_Base_Dataset(Dataset):
             images.append(b[0])
             targets.append(b[1])
         images = torch.stack(images, dim=0)
+        targets = torch.tensor(targets, dtype=torch.int64)
         return images, targets
 
 
@@ -200,6 +211,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         image_dir (str): Directory with images. 
         indices (np.array, optinal): Indices to select slides from database. Defaults to None.
         pseudo_epoch_length (int, optional): Number of patches for each epoch. Defaults to 512.
+                sqlite_command (str, optional): Command to select data from sqlite database. Defaults to None.
         mit_prob (float, optional): Percentage of patches with mitotic figures. Defaults to 0.5.
         arb_prob (float, optional): Percentage of random patches. Defaults to 0.25.
         patch_size (int, optional): Patch size. Defaults to 128.
@@ -211,6 +223,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         sqlite_file: str,
         image_dir: str,
         indices: np.array = None,
+        sqlite_command: str = None, 
         pseudo_epoch_length: int = 512,
         mit_prob: float = 0.5,
         arb_prob: float = 0.25,
@@ -221,6 +234,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         self.sqlite_file = sqlite_file
         self.image_dir = image_dir
         self.indices = indices  
+        self.sqlite_command = sqlite_command
         self.pseudo_epoch_length = pseudo_epoch_length
         self.mit_prob = mit_prob
         self.arb_prob = arb_prob
@@ -253,16 +267,9 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         return slide_objects
 
 
-    def sample_patches(
-        self, 
-        mit_prob: float=None, 
-        arb_prob: float=None) -> Dict[str, Dict[str, Coords]]:
+    def sample_patches(self) -> Dict[str, Dict[str, Coords]]:
         """Samples patches from all slides with equal probability.
         Proportions of patches with mitotic figures or imposters can be adjusted with mit_prob or arb_prob.
-
-        Args:
-            mit_prob (float, optional): Percentage of patches with mitotic figures. Defaults to None.
-            arb_prob (float, optional): Percentage of random patches. Defaults to None.
 
         Returns:
             Dict[str, Dict[str, Coords]]: Dictionary with {idx: coords, label}
@@ -272,15 +279,21 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         # sample patches
         patches = {}
         for idx, slide in enumerate(slides):
-            patches[idx] = self.sample_func(slide, mit_prob, arb_prob)
+            patches[idx] = self.sample_func(slide, self.mit_prob, self.arb_prob)
         return patches
+
+
+    def resample_patches(self):
+        """Loads a new set of patches."""
+        self.samples = self.sample_patches()
+        print('Sampled new patches!')
 
 
     def sample_func(
         self,
         fn: str, 
-        mit_prob: float = None, 
-        arb_prob: float = None
+        mit_prob: float, 
+        arb_prob: float,
         ) -> Dict[str, Tuple[Coords, int]]:
         """Samples patches randomly from a slide.
 
@@ -288,26 +301,21 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
 
         Args:
             fn (str): Filename (e.g. "042.tiff")
-            mit_prob (float, optional): Proportion of patches with mitotic figure. Defaults to None.
-            arb_prob (float, optional): Proportion of random patches. Defaults to None.
+            mit_prob (float): Proportion of patches with mitotic figure. Defaults to None.
+            arb_prob (float): Proportion of random patches. Defaults to None.
 
         Returns:
             Dict[str, Tuple[Coords, int]]: Dictionary with filenames, patch coordinates and the label.
         """
-
-         # set sampling probabilities
-        mit_prob = self.mit_prob if mit_prob is None else mit_prob
-        arb_prob = self.arb_prob if arb_prob is None else arb_prob
-
         # get slide object
         sl = self.slide_objects[fn]
 
         # get dims
-        slide_width, slide_height = sl.slide_size
-        patch_width, patch_height = sl.patch_size
+        slide_width, slide_height = sl.slide_dims
+        patch_width, patch_height = sl.patch_dims
 
         # create sampling probabilites
-        sample_prob = np.array([self.arb_prob, self.mit_prob, 1-self.mit_prob-self.arb_prob])
+        sample_prob = np.array([arb_prob, mit_prob, 1-mit_prob-arb_prob])
 
         # sample case from probabilites (0 = random, 1 = mitosis, 2 = imposter)
         case = choice(3, p=sample_prob)
@@ -350,7 +358,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
                 x, y = NMF.iloc[idx]
 
         # set offsets
-        offset_scale = 0.5
+        offset_scale = 0.2
         xoffset = randint(-patch_width, patch_width) * offset_scale
         yoffset = randint(-patch_height, patch_height) * offset_scale
 
@@ -387,7 +395,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         if self.transforms is not None:
             img = self.transforms(img)
         else:
-            img = torch.from_numpy(img / 255).permute(2, 0, 1).type(torch.float32)
+            img = torch.from_numpy(np.array(img) / 255).permute(2, 0, 1).type(torch.float32)
 
         label = torch.as_tensor(label, dtype=torch.int64)
         return img, label
@@ -404,6 +412,7 @@ class Mitosis_Validation_Dataset(Mitosis_Training_Dataset):
         sqlite_file (str): Path to database. 
         image_dir (str): Directory with images. 
         indices (np.array, optinal): Indices to select slides from database. Defaults to None.
+                sqlite_command (str, optional): Command to select data from sqlite database. Defaults to None.
         patch_size (int, optional): _description_. Defaults to 128.
         level (int, optional): _description_. Defaults to 0.
         n_random_samples (int, optional): _description_. Defaults to 0.
@@ -414,6 +423,7 @@ class Mitosis_Validation_Dataset(Mitosis_Training_Dataset):
         sqlite_file: str,
         image_dir: str,
         indices: np.array = None,
+        sqlite_command: str = None,
         patch_size: int = 128, 
         level: int = 0,
         n_random_samples: int = 0,
@@ -422,6 +432,7 @@ class Mitosis_Validation_Dataset(Mitosis_Training_Dataset):
         self.sqlite_file = sqlite_file
         self.image_dir = image_dir
         self.indices = indices  
+        self.sqlite_command = sqlite_command
         self.patch_size = patch_size
         self.level = level
         self.transforms = transforms
@@ -442,14 +453,14 @@ class Mitosis_Validation_Dataset(Mitosis_Training_Dataset):
         """
         patches = {}
         for idx, row in self.data.iterrows():
-            fn, x, y = row.filename, row.x - self.patch_size / 2 , row.y - self.patch_size / 2
+            fn, x, y = row.filename, int(row.x - self.patch_size / 2) , int(row.y - self.patch_size / 2)
             label = 1 if row.label == 1 else 0
             patches[idx] = {'file': fn, 'coords': (x, y), 'label': label}
             
         if self.n_random_samples > 0:
-            slides = choice(list(self.slide_objects.keys()), size=self.pseudo_epoch_length, replace=True)
+            slides = choice(list(self.slide_objects.keys()), size=self.n_random_samples, replace=True)
             for idx, slide in enumerate(slides):
-                patches[idx] = self.sample_func(slide, mit_prob=0, arb_prob=1)
+                patches[(idx + len(self.data))] = self.sample_func(slide, mit_prob=0, arb_prob=1)
 
         return patches 
 

@@ -29,7 +29,7 @@ def save_splits(
         column_keys (Tuple[str]): Column names (e.g. train, val, test).
         filename (str): File name for the dataframe.
     """
-    splits = [split_datasets[i].data.slide.unique() for i in range(len(split_datasets))]
+    splits = [pd.Series(split_datasets[i].data.slide.unique()) for i in range(len(split_datasets))]
     df = pd.concat(splits, ignore_index=True, axis=1)
     df.columns = column_keys
     df.to_csv(filename)
@@ -169,7 +169,7 @@ def get_split_loader(
     """
     kwargs = {
         'batch_size': args.batch_size,
-        'num_worker': args.num_worker,
+        'num_workers': args.num_workers,
         'collate_fn': collante_fn
         }
     if training:
@@ -201,7 +201,7 @@ def train(
     """
     print('\nTraining fold {}!'.format(run_id))
     if args.logging:
-        run = wandb.init(reinit=True, project=args.project_name, name='_'.join(str(run_id), args.exp_code))
+        run = wandb.init(reinit=True, project=args.project_name, name='_'.join([str(run_id).zfill(2), args.exp_code]))
 
     print('\nInitialize train/val/test splits ...', end=' ')
     train_split, val_split, test_split = datasets
@@ -215,19 +215,22 @@ def train(
     loss_fn = nn.functional.binary_cross_entropy_with_logits
 
     # init model
-    print('\Initialize model ...', end=' ')
+    print('\nInitialize model ...', end=' ')
     model = Mitosis_Classifier(model=args.model, weights=args.weights)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.device_count() > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
-        model = nn.DataParallel(model)
+        model = nn.DataParallel(model, device_ids=[0, 1])
+    model = model.to(device)
+
     print('Done!')
     print_model(model)
 
-    print('\n Init optimizer ...', end=' ')
+    print('\nInit optimizer ...', end=' ')
     optimizer = get_optimizer(model, args)
     print('Done!')
 
-    print('\Initialize dataloader ...', end=' ')
+    print('\nInitialize dataloader ...', end=' ')
     collate_fn = train_split.collate_fn
     train_loader = get_split_loader(train_split, args, collante_fn=collate_fn, training=True)
     val_loader = get_split_loader(val_split, args, collante_fn=collate_fn, training=False)
@@ -266,7 +269,8 @@ def train(
         wandb.log(val_metrics)
         wandb.log(test_metrics)
 
-    run.finish()
+    if args.logging:
+        run.finish()
     return val_metrics, test_metrics
 
 
@@ -277,7 +281,11 @@ def train_loop(
     optimizer: Optimizer,
     loss_fn: nn.functional,
     calculate_metrics: bool = False, 
-    logging: bool = True) -> None:
+    logging: bool = True,
+    reload_patches: bool = True) -> None:
+
+    if reload_patches and epoch > 0:
+        loader.dataset.resample_patches()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.train()
@@ -290,7 +298,7 @@ def train_loop(
             Precision(task='binary'), 
             Recall(task='binary')],
             prefix='train/')
-
+        metrics = metrics.to(device)
 
     train_loss = 0.
     train_error = 0.
@@ -301,7 +309,7 @@ def train_loop(
 
         # forward pass 
         logits, _, Y_hat = model(images)
-        loss = loss_fn(logits, labels)
+        loss = loss_fn(logits, labels.float())
         loss_value = loss.item()
         train_loss += loss_value
         if (batch_idx + 1) % 10 == 0:
@@ -355,6 +363,7 @@ def eval_loop(
             Precision(task='binary'), 
             Recall(task='binary')],
             prefix=logging_prefix)
+        metrics = metrics.to(device)
 
     val_loss = 0.
     val_error = 0.
@@ -365,7 +374,7 @@ def eval_loop(
 
             # forward pass 
             logits, _, Y_hat = model(images)
-            loss = loss_fn(logits, labels)
+            loss = loss_fn(logits, labels.float())
             loss_value = loss.item()
             val_loss += loss_value
             error = calculate_error(Y_hat, labels)
@@ -377,6 +386,8 @@ def eval_loop(
 
     val_error /= len(loader)
     val_loss /= len(loader)
+
+    print('Val set, val_loss: {:.4f}, val_error: {:.4f}'.format(val_loss, val_error))
 
     if logging:
         wandb.log({
@@ -415,6 +426,7 @@ def summary(
             Precision(task='binary'), 
             Recall(task='binary')],
             prefix=logging_prefix)
+        metrics = metrics.to(device)
 
     test_error = 0.
 
@@ -433,13 +445,14 @@ def summary(
 
     test_error /= len(loader)
 
-    if not calculate_metrics:
-        return {logging_prefix + '_error': test_error}  
+    if calculate_metrics:
+        res = metrics.compute()
+        res = {k: v.cpu().item() for k, v in res.items()}
+        res.update({logging_prefix + 'error': test_error})
+        return res
             
     else:
-        res = metrics.compute()
-        res.update({logging_prefix + 'error': test_error})
-        return res 
+        return {logging_prefix + '_error': test_error}  
 
 
 def save_pkl(filename: str, object: Any) -> None:
@@ -451,3 +464,34 @@ def load_pkl(filename: str) -> Any:
     with open(filename, 'rb') as f:
         file = pickle.load(f)
     return file 
+
+
+
+def initiate_model(
+    model: str,
+    ckpt_path: str
+    ) -> Mitosis_Classifier:
+    """Load a Mitosis Classifier with weights from ckpt_path.
+
+    Args:
+        model (str): Model type.
+        ckpt_path (str): Path to weights.
+
+    Returns:
+        Mitosis_Classifier: 
+    """
+    # build model 
+    model = Mitosis_Classifier(model=model, num_classes=1)
+    # print_model(model)
+
+    # load weights
+    ckpt = torch.load(ckpt_path)
+    ckpt_clean = {}
+    for key in ckpt.keys():
+        ckpt_clean.update({key.replace('module.', ''):ckpt[key]})
+    model.load_state_dict(ckpt_clean, strict=True)
+
+    model.eval()
+    return model 
+
+
