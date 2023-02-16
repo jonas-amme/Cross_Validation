@@ -374,6 +374,7 @@ def eval_loop(
 
             # forward pass 
             logits, _, Y_hat = model(images)
+            logits = logits.view(-1)
             loss = loss_fn(logits, labels.float())
             loss_value = loss.item()
             val_loss += loss_value
@@ -436,6 +437,7 @@ def summary(
 
             # forward pass 
             logits, _, Y_hat = model(images)
+            logits = logits.view(-1)
             error = calculate_error(Y_hat, labels)
             test_error += error
 

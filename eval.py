@@ -26,16 +26,16 @@ MIDOG2_COMMAND = 'SELECT coordinateX as x, coordinateY as y, Annotations.agreedC
 parser = argparse.ArgumentParser(description='CV Eval Script for Mitosis-Classifier')
 
 # directory settings
-parser.add_argument('--sqlite_file', type=str, default=None)
-parser.add_argument('--image_dir', type=str, default=None)
-parser.add_argument('--result_dir', type=str, default='./results', help='Directory containing results from CV')
-parser.add_argument('--models_exp_code', type=str, default='experiment_0', help='Directory under results_dir containing trained models')
-parser.add_argument('--save_exp_code', type=str, default='./eval_results', help='Directory for to save eval results')
+parser.add_argument('--sqlite_file', type=str, default=None, help='Path to sqlite database.')
+parser.add_argument('--image_dir', type=str, default=None, help='Directory with images.')
+parser.add_argument('--result_dir', type=str, default='./results', help='Directory containing results from CV.')
+parser.add_argument('--models_exp_code', type=str, default='experiment_0', help='Directory under results_dir containing trained models.')
+parser.add_argument('--save_exp_code', type=str, default='./eval_results', help='Directory for to save eval results'.)
 
 # misc settings
 parser.add_argument('--model', type=str, default='resnet18', help='Type of model.')
-parser.add_argument('--folds', type=int, default=5, help='Number of folds under models_exp_code')
-parser.add_argument('--use_command', action='store_true', help='Use command to remove hBC from MIDOG2 data')
+parser.add_argument('--folds', type=int, default=5, help='Number of folds under models_exp_code.')
+parser.add_argument('--use_command', action='store_true', help='Use command to remove hBC from MIDOG2 data.')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--num_workers', type=int, default=4)
 parser.add_argument('--patch_size', type=int, default=128)

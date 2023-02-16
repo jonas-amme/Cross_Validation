@@ -211,7 +211,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         image_dir (str): Directory with images. 
         indices (np.array, optinal): Indices to select slides from database. Defaults to None.
         pseudo_epoch_length (int, optional): Number of patches for each epoch. Defaults to 512.
-                sqlite_command (str, optional): Command to select data from sqlite database. Defaults to None.
+        sqlite_command (str, optional): Command to select data from sqlite database. Defaults to None.
         mit_prob (float, optional): Percentage of patches with mitotic figures. Defaults to 0.5.
         arb_prob (float, optional): Percentage of random patches. Defaults to 0.25.
         patch_size (int, optional): Patch size. Defaults to 128.
