@@ -103,7 +103,7 @@ parser = argparse.ArgumentParser(description='Configuration for Cross-validation
 
 # directory settings
 parser.add_argument('--sqlite_file', type=str, default='./annotations/MIDOG.sqlite', help='Path to sqlite database.')
-parser.add_argument('--image_dir', type=str, default='/home/ammeling/data/images_training', help='Directory with images.')
+parser.add_argument('--image_dir', type=str, default='./images_dir', help='Directory with images.')
 parser.add_argument('--result_dir', type=str, default='./results', help='Directory to save results.')
 parser.add_argument('--exp_code', type=str, default='experiment_0', help='Name of folder under result_dir.')
 
@@ -111,7 +111,7 @@ parser.add_argument('--exp_code', type=str, default='experiment_0', help='Name o
 parser.add_argument('--cv', choices=['mccv', 'kfoldcv'], default='mccv', help='Which CV technique to perform.')
 parser.add_argument('--val_size', type=float, default=0.2, help='Size of validation set for MCCV.')
 parser.add_argument('--test_size', type=float, default=0.2, help='Size of test set for MCCV')
-parser.add_argument('--n_repeats', type=int, default=10, help='Number of repeats for MCCV')
+parser.add_argument('--n_repeats', type=int, default=5, help='Number of repeats for MCCV')
 parser.add_argument('--shuffle', action='store_true', help='Whether to shuffle data before splitting')
 parser.add_argument('--seed', type=int, default=42, help='Random seed.')
 parser.add_argument('--n_folds', type=int, default=10, help='Number of folds for KFOLD CV.')

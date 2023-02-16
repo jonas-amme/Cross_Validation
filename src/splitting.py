@@ -1,5 +1,12 @@
-from typing import Iterator, List, Tuple
+"""
 
+Classes for Monte Carlo Cross-Validation and KFOLD Cross-Validation. Adapted some classes from scikit-learn 
+to work with a train/val/test split to train neural networks. 
+
+Reference: https://github.com/scikit-learn/scikit-learn/blob/8c9c1f27b/sklearn/model_selection/_split.py#L377
+
+"""
+from typing import Iterator, List, Tuple
 import numpy as np
 
 
@@ -65,10 +72,7 @@ class _BaseCV:
     def get_n_splits(self) -> int:
         """Returns number of splits"""
         raise NotImplementedError
-
-    def get_splits(self) -> List[List[np.array]]:
-        """Returns indices of all splits."""
-        raise NotImplementedError
+    
 
 
 class MonteCarloCV(_BaseCV):
@@ -125,10 +129,6 @@ class MonteCarloCV(_BaseCV):
 
     def get_n_splits(self):
         return self.n_repeats
-
-
-    def get_splits(self):
-        return self.splits
 
 
 
@@ -193,8 +193,6 @@ class KfoldCV(_BaseCV):
         return self.n_folds
 
 
-    def get_splits(self):
-        return self.splits
 
 
 

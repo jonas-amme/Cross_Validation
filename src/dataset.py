@@ -94,8 +94,19 @@ class Mitosis_Base_Dataset(Dataset):
         indices: np.array = None, 
         sqlite_command: str = None) -> None:
 
-        self.sqlite_file = sqlite_file
-        self.image_dir = image_dir  
+
+        # check sqlite file
+        if not os.path.exists(sqlite_file):
+            raise ValueError('Need to provide sqlite database.')
+        else:
+            self.sqlite_file = sqlite_file
+        
+        # check image directory
+        if not os.path.isdir(image_dir):
+            raise ValueError('Need to provide directory with images.')
+        else:
+            self.image_dir = image_dir  
+
         self.indices = indices
         self.sqlite_command = sqlite_command
 

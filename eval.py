@@ -30,7 +30,7 @@ parser.add_argument('--sqlite_file', type=str, default=None, help='Path to sqlit
 parser.add_argument('--image_dir', type=str, default=None, help='Directory with images.')
 parser.add_argument('--result_dir', type=str, default='./results', help='Directory containing results from CV.')
 parser.add_argument('--models_exp_code', type=str, default='experiment_0', help='Directory under results_dir containing trained models.')
-parser.add_argument('--save_exp_code', type=str, default='./eval_results', help='Directory for to save eval results'.)
+parser.add_argument('--save_exp_code', type=str, default='./eval_results', help='Directory for to save eval results.')
 
 # misc settings
 parser.add_argument('--model', type=str, default='resnet18', help='Type of model.')
