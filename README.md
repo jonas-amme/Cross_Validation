@@ -1,7 +1,22 @@
-# Cross-validation for neural networks.
+# Cross-validation for neural networks
 
-This repository contains code for Monte Carlo cross-validation or K-fold cross-validation of a CNN-based mitosis classification model. However, the classes for cross-validation can just as easily be used for training other models. 
+This repository contains code for Monte Carlo cross-validation or K-fold cross-validation of a CNN-based mitosis classification model. However, the classes for cross-validation can just as easily be used for training other models similar to the scikit-learn classes. 
 
+
+## Prerequisites
+
+* A Linux OS (tested with Ubuntu 20.04)
+* A gpu with at least 2.5GB memory (tested with NVIDIA RTX A6000)
+* Openslide 
+
+
+## Installation
+
+```bash
+$ python3 -m venv env
+$ source env/bin/activate
+$ pip3 install -r requirements.txt 
+```
 
 ## Usage
 
@@ -52,10 +67,11 @@ for train, val, test in kcv.split(samples):
 In order to train a mitosis classifier using cross-validation on the MIDOG 2021 dataset, you need to download the images from [Google](https://drive.google.com/drive/folders/1YUMKNkXUtgaFM6jCHpZxIHPZx_CqE_qG) or [Zenodo](https://zenodo.org/record/4643381) and save them under `./image_dir`. The sqlite database is provided under `./annotations/MIDOG.sqlite`.
 
 
+
 ## Train a Mitosis Classifier with CV
 
 After downloading the data to `./image_dir`, the training of a ResNet18 on MIDOG 2021 using 5-Fold CV and logging everything with Weights & Biases can be performed with the following command:
 
-```
-python main.py --image_dir ./image_dir --exp_code KFOLD_5_resnet18 --cv kfoldcv --n_folds 5 --max_epochs 50 --pseudo_epoch_length 1024 --patience 10 --stop_epoch 20 --batch_size 32 --early_stopping --logging --calculate_metrics --shuffle
+```bash
+$ python3 main.py --image_dir ./image_dir --exp_code KFOLD_5_resnet18 --cv kfoldcv --n_folds 5 --max_epochs 50 --pseudo_epoch_length 1024 --patience 10 --stop_epoch 20 --batch_size 32 --early_stopping --logging --calculate_metrics --shuffle
 ```

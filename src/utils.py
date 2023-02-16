@@ -226,7 +226,7 @@ def train(
     print('Done!')
     print_model(model)
 
-    print('\nInit optimizer ...', end=' ')
+    print('\nInitialize optimizer ...', end=' ')
     optimizer = get_optimizer(model, args)
     print('Done!')
 
@@ -313,7 +313,7 @@ def train_loop(
         loss_value = loss.item()
         train_loss += loss_value
         if (batch_idx + 1) % 10 == 0:
-            print('batch {}, loss: {:.4f}'.format(batch_idx, loss_value))
+            print('batch {}, loss: {:.4f}'.format((batch_idx + 1), loss_value))
         error = calculate_error(Y_hat, labels)
         train_error += error
 

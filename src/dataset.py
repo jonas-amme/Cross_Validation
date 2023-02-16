@@ -241,11 +241,8 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         patch_size: int = 128, 
         level: int = 0,
         transforms: Union[List[Callable], Callable] = None) -> None:
+        Mitosis_Base_Dataset.__init__(sqlite_file, image_dir, indices, sqlite_command)
 
-        self.sqlite_file = sqlite_file
-        self.image_dir = image_dir
-        self.indices = indices  
-        self.sqlite_command = sqlite_command
         self.pseudo_epoch_length = pseudo_epoch_length
         self.mit_prob = mit_prob
         self.arb_prob = arb_prob
@@ -253,7 +250,6 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         self.level = level
         self.transforms = transforms
 
-        self.data = self.load_database()
         self.slide_objects = self.load_slide_objects()
         self.samples = self.sample_patches()
 
@@ -439,17 +435,13 @@ class Mitosis_Validation_Dataset(Mitosis_Training_Dataset):
         level: int = 0,
         n_random_samples: int = 0,
         transforms: Union[List[Callable], Callable] = None) -> None:
+        Mitosis_Base_Dataset.__init__(self, sqlite_file, image_dir, indices, sqlite_command)
 
-        self.sqlite_file = sqlite_file
-        self.image_dir = image_dir
-        self.indices = indices  
-        self.sqlite_command = sqlite_command
         self.patch_size = patch_size
         self.level = level
         self.transforms = transforms
         self.n_random_samples = n_random_samples
 
-        self.data = self.load_database()
         self.slide_objects = self.load_slide_objects()
         self.samples = self.sample_patches()
 
