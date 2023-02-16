@@ -75,3 +75,8 @@ After downloading the data to `./image_dir`, the training of a ResNet18 on MIDOG
 ```bash
 $ python3 main.py --image_dir ./image_dir --exp_code KFOLD_5_resnet18 --cv kfoldcv --n_folds 5 --max_epochs 50 --pseudo_epoch_length 1024 --patience 10 --stop_epoch 20 --batch_size 32 --early_stopping --logging --calculate_metrics --shuffle
 ```
+
+
+## Acknowledgements
+
+J.A. acknowleges funding by the [Bavarian Institute for Digital Transformation](https://badw.de/bayerisches-forschungsinstitut-fuer-digitale-transformation.html) from the Project [ReGInA](https://en.bidt.digital/regina/).
