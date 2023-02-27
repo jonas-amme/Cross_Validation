@@ -241,7 +241,7 @@ class Mitosis_Training_Dataset(Mitosis_Base_Dataset):
         patch_size: int = 128, 
         level: int = 0,
         transforms: Union[List[Callable], Callable] = None) -> None:
-        Mitosis_Base_Dataset.__init__(sqlite_file, image_dir, indices, sqlite_command)
+        Mitosis_Base_Dataset.__init__(self, sqlite_file, image_dir, indices, sqlite_command)
 
         self.pseudo_epoch_length = pseudo_epoch_length
         self.mit_prob = mit_prob

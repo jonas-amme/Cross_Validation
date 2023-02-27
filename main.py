@@ -53,6 +53,7 @@ def main(args):
     # set dataset args
     train_kwargs = {
         'sqlite_file': args.sqlite_file,
+        'sqlite_command': sqlite_command,
         'image_dir': args.image_dir,
         'pseudo_epoch_length': args.pseudo_epoch_length,
         'patch_size': args.patch_size,
@@ -64,6 +65,7 @@ def main(args):
     }
     val_kwargs = {
         'sqlite_file': args.sqlite_file,
+        'sqlite_command': sqlite_command,
         'image_dir': args.image_dir,
         'patch_size': args.patch_size,
         'level': args.level,
@@ -74,9 +76,9 @@ def main(args):
     for run_id, (train_ids, val_ids, test_ids) in enumerate(cv.split(indices)):
 
         # create datasets
-        train_ds = dataset.return_split(indices=train_ids, training=True, **train_kwargs)
-        val_ds = dataset.return_split(indices=val_ids, training=False, **val_kwargs)
-        test_ds = dataset.return_split(indices=test_ids, training=False, **val_kwargs)
+        train_ds = dataset.return_split(indices=indices[train_ids], training=True, **train_kwargs)
+        val_ds = dataset.return_split(indices=indices[val_ids], training=False, **val_kwargs)
+        test_ds = dataset.return_split(indices=indices[test_ids], training=False, **val_kwargs)
         datasets = (train_ds, val_ds, test_ds)
         
         # start training on the folds 
