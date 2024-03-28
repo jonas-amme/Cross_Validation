@@ -234,7 +234,7 @@ def train(
     collate_fn = train_split.collate_fn
     train_loader = get_split_loader(train_split, args, collante_fn=collate_fn, training=True)
     val_loader = get_split_loader(val_split, args, collante_fn=collate_fn, training=False)
-    test_loader = get_split_loader(train_split, args, collante_fn=collate_fn, training=False)
+    test_loader = get_split_loader(test_split, args, collante_fn=collate_fn, training=False)
     print('Done!')
 
     print('\nInitialize EarlyStopping ...', end=' ')
